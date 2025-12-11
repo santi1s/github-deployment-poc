@@ -137,6 +137,23 @@ else
   exit 1
 fi
 
+# Step 5: Create commit status (this makes it visible on the commit page)
+echo ""
+echo -e "${YELLOW}Step 5/5: Creating commit status badge...${NC}"
+CONTEXT="deploy/$ENVIRONMENT"
+DESCRIPTION="Deployed to $ENVIRONMENT"
+
+if GITHUB_TOKEN="$GITHUB_TOKEN" REPOSITORY="$REPOSITORY" GIT_SHA="$GIT_SHA" \
+   STATE="success" ENVIRONMENT="$ENVIRONMENT" GITHUB_ORG="$GITHUB_ORG" \
+   CONTEXT="$CONTEXT" DESCRIPTION="$DESCRIPTION" \
+   DEPLOYMENT_URL="$LOG_URL" \
+   bash "$SCRIPT_DIR/create-commit-status.sh" > /dev/null 2>&1; then
+  echo -e "${GREEN}✅ Commit status badge created${NC}"
+else
+  echo -e "${RED}❌ Failed to create commit status badge${NC}"
+  exit 1
+fi
+
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}✅ Deployment simulation completed successfully!${NC}"
