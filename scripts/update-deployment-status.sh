@@ -98,7 +98,7 @@ RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
 # Extract HTTP status code (last line)
 HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
 # Extract response body (all but last line)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
   echo "❌ ERROR: Failed to update deployment status (HTTP $HTTP_CODE)"
