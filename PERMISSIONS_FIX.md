@@ -10,17 +10,37 @@ But they're NOT showing:
 - ❌ On the commit page itself
 - ❌ As deployment badges on commits
 
-## Root Cause: Missing "Contents" Permission
+## Root Cause Analysis
 
-Your GitHub App currently has:
+Based on official GitHub documentation, your deployment visibility issue is likely caused by **one of these missing permissions**:
+
+### Current State (What You Have):
 - ✅ **Deployments**: Read & Write
+- ✅ **Contents**: Read
 
-But it likely needs:
-- ❌ **Contents**: Read (missing)
+### What's Likely Missing:
 
-GitHub requires the app to have permission to **read repository contents** (commits) to link deployments to commits on the commit page.
+**Option 1: Statuses Permission (MOST LIKELY)**
+- ❌ **Statuses**: Read (or Read & Write)
+- GitHub's REST API requires this permission to create and display commit statuses
+- Even though deployments are created, they won't display on commit pages without status permission
+- [GitHub REST API Reference: Commit Statuses](https://docs.github.com/en/rest/commits/statuses)
 
-## Solution: Add Contents Permission
+**Option 2: Checks Permission (ALTERNATIVE)**
+- ❌ **Checks**: Read & Write
+- Some GitHub features use Checks API instead of traditional statuses
+- May be required in addition to or instead of Statuses
+
+### Why This Matters:
+
+GitHub has **three separate systems** for commit metadata:
+1. **Deployments API** - Creates deployment records (what you're using)
+2. **Statuses API** - Updates commit status indicators on the UI (needed for display)
+3. **Checks API** - Modern check runs with detailed output
+
+**Deployments are created successfully** but **won't display on commit pages** without the corresponding Status or Check permissions to render them in the UI.
+
+## Solution: Add Statuses Permission
 
 ### Step 1: Go to Your GitHub App Settings
 
@@ -39,15 +59,19 @@ Look for **"Repository permissions"** section:
 
 **Current state:**
 ```
-Deployments: Read & write
-Contents: (not set or Read-only)
+Deployments: Read & write  ✅
+Contents: Read             ✅
+Statuses: (not set)        ❌ MISSING
 ```
 
 **Change to:**
 ```
 Deployments: Read & write  ← Keep this
-Contents: Read             ← Add this (or Change to Read & write)
+Contents: Read             ← Keep this
+Statuses: Read & write     ← ADD THIS (required for deployment display)
 ```
+
+**Note**: Some GitHub App settings interfaces may show this as "Commit statuses" instead of "Statuses".
 
 ### Step 3: Save Changes
 
@@ -85,15 +109,27 @@ source .env
 
 | Permission | What It Enables |
 |---|---|
-| **Deployments: Read** | Read deployment info |
-| **Deployments: Write** | Create/update deployments |
+| **Deployments: Read** | Read deployment records |
+| **Deployments: Write** | Create/update deployments ✅ You're using this |
 | **Contents: Read** | Read commits, files, branches |
 | **Contents: Write** | Modify repository content |
+| **Statuses: Read** | Read commit status information |
+| **Statuses: Write** | Create/update commit statuses and deployment badges ✅ NEEDED |
 | **Metadata: Read** | Basic repository info |
 
-For deployment display on commits, you need:
-- `Deployments: Write` (create deployments)
-- `Contents: Read` (link to commits)
+### For Complete Deployment Functionality:
+
+**To create deployments:**
+- ✅ `Deployments: Write` (create deployment records)
+
+**To display deployments on commits:**
+- ✅ `Contents: Read` (identify commits)
+- ⚠️ `Statuses: Read & Write` (render deployment badges on commit pages)
+
+**The Key Insight:**
+Creating a deployment (API call succeeds) ≠ Displaying a deployment (requires Status permission)
+
+GitHub separates the API operation from the UI rendering. You need both permissions.
 
 ## GitHub Deployment Display Locations
 
@@ -128,13 +164,16 @@ May show deployment info for releases
 
 After making changes:
 
-- [ ] Go to GitHub App settings
-- [ ] Verify **Deployments**: Read & write is set
-- [ ] Verify **Contents**: Read is set (or Read & write)
+- [ ] Go to GitHub App settings (https://github.com/settings/apps/github-deployment-poc/permissions)
+- [ ] Verify **Deployments**: Read & write is set ✅
+- [ ] Verify **Contents**: Read is set ✅
+- [ ] Verify **Statuses**: Read & write is set ⚠️ (ADD THIS if missing)
 - [ ] Saved changes
-- [ ] Re-authorized the app if prompted
+- [ ] Re-authorized the app if prompted by GitHub
+- [ ] Went to repo settings and re-configured the app if needed
 - [ ] Created a new deployment with `./scripts/deploy-simulation.sh`
-- [ ] Checked commit page for deployment badge
+- [ ] Waited 5-10 seconds for GitHub to process the deployment
+- [ ] Checked the commit page for deployment badge: https://github.com/santi1s/github-deployment-poc/commit/[COMMIT_SHA]
 - [ ] Checked `/deployments` tab to confirm deployments exist
 
 ## Still Not Showing?
@@ -143,30 +182,50 @@ If deployments still don't appear on the commit page after fixing permissions:
 
 ### Check These:
 
-1. **Correct Commit SHA**
+1. **Verify Statuses Permission is Added**
+   - Go to: https://github.com/settings/apps/github-deployment-poc/permissions
+   - Look for **"Statuses"** or **"Commit statuses"** in Repository permissions
+   - If NOT present, this is likely your issue
+   - Add **Statuses: Read & Write** and save
+
+2. **Re-authorize the App After Permission Change**
+   - GitHub may require you to re-install the app on your repository
+   - Go to: https://github.com/santi1s/github-deployment-poc/settings/installations
+   - Find **github-deployment-poc** app
+   - Click **"Configure"** or **"Update"**
+   - Review and approve the new **Statuses** permission request
+
+3. **Correct Commit SHA**
    - Verify the commit SHA matches what was deployed
    - Check: `git log --oneline` to see commit list
+   - Make sure you're using the exact SHA from the deployment
 
-2. **Wait for GitHub Sync**
-   - Sometimes takes 5-10 minutes
-   - Try refreshing the page after waiting
+4. **Wait for GitHub Sync**
+   - GitHub may take 5-10 seconds to render deployment badges
+   - Try refreshing the commit page (Cmd+Shift+R for hard refresh)
 
-3. **Branch Settings**
+5. **Branch Settings**
    - Make sure you're viewing a public or accessible branch
    - Some enterprise settings restrict deployment display
 
-4. **App Installation**
+6. **App Installation Status**
    - Go to: https://github.com/settings/installations
    - Check that the app is installed for your repository
-   - May need to re-install if permissions changed
+   - Verify no "warning" status is shown for permissions
 
-5. **API vs UI Consistency**
+7. **API vs UI Consistency**
    - Verify deployments exist via API:
      ```bash
+     cd /Users/sergiosantiago/projects/personal/github-deployment-poc
      source .env
      ./scripts/list-deployments.sh
      ```
-   - If they exist in API but not in UI, it's a GitHub rendering issue (temporary)
+   - If they exist in API but not in UI, check that Statuses permission was saved
+   - Sometimes GitHub's UI lags behind API - wait a few seconds and refresh
+
+### The Root Issue Most Likely:
+
+If you see deployments in the API and Deployments tab, but NOT on commit pages, it's almost certainly because **Statuses: Read & Write permission is missing** from your GitHub App configuration.
 
 ## Quick Reference
 
@@ -205,4 +264,39 @@ If you're still having issues after checking permissions:
 
 ## Security Note
 
-Giving the app **Contents: Read** permission is safe - it just allows the app to read your repository's code and commit history, which is necessary for linking deployments to commits.
+Giving the app these permissions is safe:
+- **Contents: Read** - Allows the app to read repository code and commit history
+- **Statuses: Read & Write** - Allows the app to create deployment status badges on commits
+
+Both are read-only at the file level and only create metadata about deployments, not modifying code.
+
+## Official GitHub Documentation
+
+This guide is based on official GitHub REST API documentation:
+
+1. **Deployments API**
+   - Endpoint: `POST /repos/{owner}/{repo}/deployments`
+   - Requires: `Deployments: Read & Write` permission
+   - [GitHub Deployments API Reference](https://docs.github.com/en/rest/deployments/deployments)
+
+2. **Deployment Statuses API**
+   - Endpoint: `POST /repos/{owner}/{repo}/deployments/{deployment_id}/statuses`
+   - Requires: `Deployments: Read & Write` permission
+   - [GitHub Deployment Statuses API Reference](https://docs.github.com/en/rest/deployments/statuses)
+
+3. **Commit Statuses API**
+   - Endpoint: `GET/POST /repos/{owner}/{repo}/statuses/{sha}`
+   - Requires: `Statuses: Read & Write` permission
+   - Needed for rendering deployment badges on commit pages
+   - [GitHub Commit Statuses API Reference](https://docs.github.com/en/rest/commits/statuses)
+
+4. **GitHub App Permissions**
+   - [Complete Permissions Reference](https://docs.github.com/en/apps/building-github-apps/managing-permissions-for-github-apps)
+   - See "Repository permissions" section for detailed permission descriptions
+
+## Key Difference: API vs UI
+
+- **API Success** ≠ **UI Display**
+- Creating a deployment (API call) requires `Deployments: Write`
+- Displaying deployments on commits (UI rendering) requires `Statuses: Read & Write`
+- This is why you can see deployments via API and in `/deployments` tab, but not on commit pages
