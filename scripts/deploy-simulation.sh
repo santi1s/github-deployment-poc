@@ -142,11 +142,13 @@ echo ""
 echo -e "${YELLOW}Step 5/5: Creating commit status badge...${NC}"
 CONTEXT="deploy/$ENVIRONMENT"
 DESCRIPTION="Deployed to $ENVIRONMENT"
+# Link to the main deployments page rather than a specific deployment
+DEPLOYMENT_PAGE_URL="https://github.com/$GITHUB_ORG/$REPOSITORY/deployments"
 
 if GITHUB_TOKEN="$GITHUB_TOKEN" REPOSITORY="$REPOSITORY" GIT_SHA="$GIT_SHA" \
    STATE="success" ENVIRONMENT="$ENVIRONMENT" GITHUB_ORG="$GITHUB_ORG" \
    CONTEXT="$CONTEXT" DESCRIPTION="$DESCRIPTION" \
-   DEPLOYMENT_URL="$LOG_URL" \
+   DEPLOYMENT_URL="$DEPLOYMENT_PAGE_URL" \
    bash "$SCRIPT_DIR/create-commit-status.sh" > /dev/null 2>&1; then
   echo -e "${GREEN}✅ Commit status badge created${NC}"
 else
